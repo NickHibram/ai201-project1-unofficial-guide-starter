@@ -10,7 +10,17 @@
 ## Domain
 
 <!-- What domain did you choose? Why is this knowledge valuable and hard to find through official channels? -->
+My domain is historical music knowledge, with an emphasis on instrument construction. It can be difficult to find because it is scattered across specialized, often antiquated books whose terminology and structure make them hard to search and synthesize. All of my sources were retrieved from Project Gutenberg.
 
+  1. What are the main principles of effective orchestration?
+  2. How do violin and cello playing techniques differ?
+  3. What materials and construction methods were used in early Italian harpsichords?
+  4. How does a pipe organ produce and control sound?
+  5. What makes the Highland bagpipe historically and musically distinctive?
+  6. How did the coach horn function, and what was its cultural significance?
+  7. What are the first skills a beginner should learn in bell ringing?
+  8. Compare how instrument design influences the sound of the organ, harpsichord, and
+     violin.
 ---
 
 ## Documents
