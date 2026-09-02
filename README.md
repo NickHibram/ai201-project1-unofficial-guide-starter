@@ -262,9 +262,31 @@ System response (refusal):
 
 **Instance 1**
 
-- *What I gave the AI:*
-- *What it produced:*
-- *What I changed or overrode:*
+- *What I gave the AI:* My draft Chunking Strategy section from `planning.md` (fixed 500-character
+  chunks, 100-character overlap) plus read access to `documents/`, in a Claude Code session. I asked it to evaluate the strategy against my actual corpus rather
+  than in the abstract.
+
+- *What it produced:* It measured paragraph-length distributions across all 11 books and found
+  that my stated premise contradicted my number — I had justified 500 characters by calling the
+  documents "longform and convoluted," which is an argument for *larger* chunks. It recommended
+  recursive splitting at ~900 characters with paragraph packing. When I said I thought semantic
+  chunking would be the better fit, it ran an embedding test instead of just re-asserting: across
+  60 consecutive *distinct* biographical entries in the violin handbook, mean cosine similarity
+  was 0.505 with std 0.087 — no detectable dip at the true entry boundaries — while the
+  organ-building prose showed std 0.155, meaning real topic signal. It then proposed routing
+  document types to different strategies.
+
+- *What I changed or overrode:* (1) I rejected the proposal to route *Musical Instruments* to
+  one-chunk-per-paragraph, since paragraphs in that book run past 2,800 characters — far beyond
+  the embedding model's window. (2) I corrected the pipeline architecture: it had folded
+  boilerplate stripping into the chunking recipe, and I moved it to the ingestion stage so the
+  chunker only chunks. (3) I rejected its first draft of the planning.md section because I could
+  not explain the separator ladder it relied on, and required it to explain the mechanism before I
+  accepted the text. I also chose plain recursive splitting over its hybrid routing proposal, on
+  my own reasoning — a fixed size would not showcase the corpus, semantic gives no guarantee on
+  content size, and my documents are not uniformly formatted. I did accept its case for raising
+  the cap from 500 to 900 after it showed only 17% of substantive paragraphs survive intact at
+  500 versus 59% at 900.
 
 **Instance 2**
 
