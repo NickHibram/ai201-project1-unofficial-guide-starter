@@ -1,0 +1,100 @@
+digraph RAGPipeline {
+  graph [
+    rankdir=TB,
+    bgcolor="white",
+    pad="0.35",
+    nodesep="0.40",
+    ranksep="0.52",
+    fontname="Arial"
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    color="#24557A",
+    fillcolor="#EDF5FB",
+    fontcolor="#123047",
+    fontname="Arial",
+    fontsize=13,
+    margin="0.20,0.14"
+  ];
+
+  edge [
+    color="#24557A",
+    penwidth=1.6,
+    arrowsize=0.75,
+    fontname="Arial",
+    fontsize=10,
+    fontcolor="#38556B"
+  ];
+
+  documents [
+    label=<
+      <B>Music source documents</B><BR/>
+      <FONT POINT-SIZE="10">11 Project Gutenberg .txt files</FONT>
+    >,
+    fillcolor="#F6F1E5",
+    color="#886B28"
+  ];
+
+  ingestion [
+    label=<
+      <B>1. Document Ingestion</B><BR/>
+      <FONT POINT-SIZE="10">Python + pathlib<BR/>Strip Gutenberg headers, footers,<BR/>and publisher matter</FONT>
+    >
+  ];
+
+  chunking [
+    label=<
+      <B>2. Chunking</B><BR/>
+      <FONT POINT-SIZE="10">Custom recursive splitter<BR/>900-character chunks<BR/>150-character overlap</FONT>
+    >
+  ];
+
+  store [
+    label=<
+      <B>3. Embedding + Vector Store</B><BR/>
+      <FONT POINT-SIZE="10">sentence-transformers<BR/>all-MiniLM-L6-v2<BR/>ChromaDB + source metadata</FONT>
+    >
+  ];
+
+  query [
+    label=<
+      <B>User question</B><BR/>
+      <FONT POINT-SIZE="10">CLI or web interface</FONT>
+    >,
+    fillcolor="#F6F1E5",
+    color="#886B28"
+  ];
+
+  retrieval [
+    label=<
+      <B>4. Retrieval</B><BR/>
+      <FONT POINT-SIZE="10">ChromaDB similarity search<BR/>Embed the question and retrieve<BR/>the 3 most relevant chunks</FONT>
+    >
+  ];
+
+  generation [
+    label=<
+      <B>5. Generation</B><BR/>
+      <FONT POINT-SIZE="10">Groq API + Llama model<BR/>Grounded prompt using only<BR/>retrieved context</FONT>
+    >
+  ];
+
+  answer [
+    label=<
+      <B>Grounded answer</B><BR/>
+      <FONT POINT-SIZE="10">Response with source attribution</FONT>
+    >,
+    fillcolor="#EAF5ED",
+    color="#36704A"
+  ];
+
+  documents -> ingestion [label="raw text"];
+  ingestion -> chunking [label="cleaned text"];
+  chunking -> store [label="chunks + metadata"];
+  store -> retrieval [label="embedded collection"];
+  query -> retrieval [label="embedded query"];
+  retrieval -> generation [label="top 3 chunks"];
+  generation -> answer [label="grounded response"];
+}

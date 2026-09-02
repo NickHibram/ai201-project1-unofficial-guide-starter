@@ -12,15 +12,6 @@
 <!-- What domain did you choose? Why is this knowledge valuable and hard to find through official channels? -->
 My domain is music knowledge. This spans from instrument construction to good techniques. It can be difficult to find because it is scattered across specialized, often antiquated books whose terminology and structure make them hard to search and synthesize. All of my sources were retrieved from Project Gutenberg.
 
-  1. What are the main principles of effective orchestration?
-  2. How do violin and cello playing techniques differ?
-  3. What materials and construction methods were used in early Italian harpsichords?
-  4. How does a pipe organ produce and control sound?
-  5. What makes the Highland bagpipe historically and musically distinctive?
-  6. How did the coach horn function, and what was its cultural significance?
-  7. What are the first skills a beginner should learn in bell ringing?
-  8. Compare how instrument design influences the sound of the organ, harpsichord, and
-     violin.
 ---
 
 ## Documents
@@ -102,10 +93,8 @@ source-title prefix. Final index: ~5,400 chunks, median 491 characters.
 
 *Preprocessing (at ingestion, before chunking).* Gutenberg license headers and footers are
 stripped at the `*** START ***` / `*** END ***` markers, along with trailing publisher matter —
-advertisements filling ~32% of *First Steps to Bell Ringing* and a sheet-music catalog filling
-~52% of the violin handbook, together ~197 chunks of query-adjacent noise. Chunks under 150
-characters are discarded after splitting, since they can only be identified once the splitter has
-run. 
+advertisements filling ~32% of *First Steps to Bell Ringing* 
+
 ---
 
 ## Retrieval Approach
@@ -117,11 +106,22 @@ run.
      support, accuracy on domain-specific text, latency? -->
 
 **Embedding model:**
-
+The EMBEDDING_MODEL is all-MiniLM-L6-v2 
 **Top-k:**
-
+We will retrieve the top 3 chunks
 **Production tradeoff reflection:**
 
+Two changes if cost weren't a constraint.
+
+*Multilingual support.* Many sources I found on Project Gutenberg were not in English, and I skipped them because `all-MiniLM-L6-v2` is English-only. A multilingual model such as `bge-m3`
+would open up French, German, and Italian sources some much of the primary literature
+
+*Context length.* MiniLM truncates at 256 tokens (~1,000 characters), silently. That ceiling is
+why my chunk cap is 900; some paragraphs run past 2,800 characters and must be split. A 512-token
+(`bge-small-en-v1.5`) or 8,192-token (`nomic-embed-text-v1.5`) model would let me raise the cap 
+
+Domain vocabulary is a secondary concern: MiniLM is trained on general web text, while my corpus
+is dense with terms like *clavicytherium* and *wrest plank*. 
 ---
 
 ## Evaluation Plan
@@ -131,13 +131,13 @@ run.
      is right or wrong. "What are good dining halls?" is too vague.
      "What do students say about wait times at [dining hall name] during lunch?" is testable. -->
 
-| # | Question | Expected answer |
-|---|----------|-----------------|
-| 1 | | |
-| 2 | | |
-| 3 | | |
-| 4 | | |
-| 5 | | |
+| # | Question | Expected answer | Expected source(s) |
+|---|----------|-----------------|--------------------|
+| 1 | What materials and construction methods were used in early Italian harpsichords? | Cases and soundboards of cypress; wrest plank and bridges of walnut; jacks are walnut slips (~3/16″ × 7/16″ × 3-1/8″) with leather plectra; thin cases, jack guides built from spacer blocks held by side strips. | *Italian Harpsichord-Building in the 16th and 17th Centuries* |
+| 2 | How does a pipe organ produce and control sound? | Bellows raise wind, which travels through trunks to the wind-chest. A key press opens a pallet, admitting wind to that pipe. Draw-stops select which ranks of pipes speak. Pallets control pitch, stops control timbre. | *Practical Organ Building* |
+| 3 | What are the first skills a beginner should learn in bell ringing? | Learn from an experienced ringer rather than alone (the text warns of a man caught by the rope round the neck). The first lesson is watching the teacher *set* the bell by repeated pulls and catches at the sally. Correct rope hold: end of the rope held permanently in the left hand, right hand free to catch the sally. | *First Steps to Bell Ringing* |
+| 4 | How do violin and cello playing techniques differ? | Violin is supported at the shoulder and collarbone using a chin-rest and often a shoulder pad; cello is held between the knees. Bow holds differ — the cello thumb rests on the upper projection, partly on the stick. The cello's thumb position in the upper register has no violin equivalent. | *Handbook of Violin Playing* **+** *Chats to 'Cello Students* |
+| 5 | Compare how instrument design influences the sound of the organ, harpsichord, and violin. | Excitation differs: organ sounds wind through pipes, harpsichord plucks strings with leather plectra mounted in jacks, violin bows strings with tone shaped by the arching of the upper table. That mechanism determines dynamic control — the harpsichord cannot vary loudness by touch and uses registers instead, the organ varies by registration, the violin varies continuously by bow pressure. | *Practical Organ Building* **+** *Italian Harpsichord-Building* **+** *Handbook of Violin Playing* |
 
 ---
 
@@ -147,9 +147,18 @@ run.
      Consider: noisy or inconsistent documents, missing source attribution, off-topic
      retrieval, chunks that split key information across boundaries. -->
 
-1.
+1. One possible challenge is that the model doesn't stay grounded, and instead of using the
+   retrieved chunks it hallucinates the answer. This is a real risk in my domain because the
+   model already has general music knowledge from pretraining, so it can produce a fluent,
+   plausible answer that never came from my documents. My sources are all 19th-century, which
+   makes it worse — a modern-sounding answer may actually read as *more* correct while being
+   completely ungrounded.
 
-2.
+2. Another possible issue is that my chunk size and overlap don't properly capture the context
+   within the documents. At a 900-character cap, only 59% of my substantive paragraphs survive
+   as a single chunk, so roughly 4 in 10 get split. If a construction method or a technique is
+   explained across one of those boundaries, retrieval may return only half the explanation and
+   the model won't have enough to answer correctly.
 
 ---
 
@@ -160,6 +169,8 @@ run.
      Label each stage with the tool or library you're using.
      You can use ASCII art, a Mermaid diagram, or embed a sketch as an image.
      You'll use this diagram as context when prompting AI tools to implement each stage. -->
+
+![Architecture diagram for the music knowledge RAG pipeline](assets/rag-pipeline-architecture.png)
 
 ---
 
@@ -175,8 +186,26 @@ run.
      "I'll give Claude my Chunking Strategy section and ask it to implement chunk_text()
      with my specified chunk size and overlap" is a plan. -->
 
+
 **Milestone 3 — Ingestion and chunking:**
+  I will use a mixture of Codex and Claude Code to implement the ingestion and chunking pipeline. I’ll provide it with my Documents and Chunking
+  Strategy sections, including the 900-character cap, 150-character overlap, separator ladder, Gutenberg header/footer
+  removal, whitespace normalization, and minimum 150-character chunk length. I’ll ask it to create functions that load
+  the .txt files, clean them, split them, and preserve each chunk’s source filename and index as metadata. I’ll verify
+  the output by inspecting sample chunks from several books, confirming no Gutenberg boilerplate remains, checking chunk
+  sizes and overlap, and confirming that each chunk retains its correct source attribution.
 
 **Milestone 4 — Embedding and retrieval:**
+  I will use Codex to implement embeddings and retrieval with sentence-transformers, all-MiniLM-L6-v2, and ChromaDB.
+  I’ll give it my Retrieval Approach section and require it to store chunk text, embeddings, and metadata; embed a user
+  question; and return the top 3 most similar chunks with source information. I’ll verify it by running my five
+  evaluation questions, reviewing the returned chunks for relevance, and checking that metadata identifies the correct
+  document for each result.
 
 **Milestone 5 — Generation and interface:**
+  I will use Codex to build a simple query interface and grounded generation step with the Groq API using the openai/
+  gpt-oss-120b model. I’ll provide the retrieved top 3 chunks, their source metadata, and a system instruction requiring
+  the model to answer only from that context or state that the documents do not contain enough information. I’ll require
+  each response to list the source document(s) used. I’ll verify it by testing several in-domain questions and one out-
+  of-scope question, checking that each response is supported by retrieved evidence, cites the correct sources, and does
+  not invent unsupported details.

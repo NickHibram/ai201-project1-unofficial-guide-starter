@@ -280,9 +280,7 @@ System response (refusal):
   one-chunk-per-paragraph, since paragraphs in that book run past 2,800 characters — far beyond
   the embedding model's window. (2) I corrected the pipeline architecture: it had folded
   boilerplate stripping into the chunking recipe, and I moved it to the ingestion stage so the
-  chunker only chunks. (3) I rejected its first draft of the planning.md section because I could
-  not explain the separator ladder it relied on, and required it to explain the mechanism before I
-  accepted the text. I also chose plain recursive splitting over its hybrid routing proposal, on
+  chunker only chunks. (3) I also chose plain recursive splitting over its hybrid routing proposal, on
   my own reasoning — a fixed size would not showcase the corpus, semantic gives no guarantee on
   content size, and my documents are not uniformly formatted. I did accept its case for raising
   the cap from 500 to 900 after it showed only 17% of substantive paragraphs survive intact at
