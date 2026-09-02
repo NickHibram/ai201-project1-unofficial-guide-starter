@@ -64,7 +64,7 @@ My domain is music knowledge. This spans from instrument construction to good te
    Recursive splitting absorbs that heterogeneity with no per-file logic.
 
 *How the separator ladder works.* The splitter takes an ordered list of places it is allowed to
-cut, best first: `["\n\n", ". ", " ", ""]`. If a piece is under 900 characters it is emitted
+cut, best first: `["\n\n", ". ", "? ", "! ", " ", ""]`. If a piece is under 900 characters it is emitted
 as-is; otherwise it is cut on the current separator and each resulting piece is re-tested against
 the next separator down. After cutting, adjacent pieces are repacked up to the cap so the output
 is not a pile of single sentences. On the 2,868-character organ paragraph in *Musical
@@ -74,9 +74,12 @@ rung 0.
 
 I deliberately omit the usual `"\n"` rung. Gutenberg texts are hard-wrapped at a median of 67
 characters with only 21% of lines ending in sentence-final punctuation, so cutting on single
-newlines would land at typographic line ends — fixed-size chunking in disguise. Whitespace inside
-each paragraph is collapsed first, and `keep_separator=True` stops the splitter from eating
-terminal periods.
+newlines would land at typographic line ends — fixed-size chunking in disguise. The review copies
+in `cleaned_documents/` retain their original whitespace for human inspection. Before splitting,
+the chunker creates an in-memory normalized copy: it collapses hard-wrapped single newlines and
+other whitespace within each paragraph while retaining blank-line paragraph boundaries. This lets
+the `. `, `? `, and `! ` rungs recognize sentence endings without changing the review files.
+`keep_separator=True` stops the splitter from eating terminal punctuation.
 
 *Why 900 characters.* Tested against 500 on the actual corpus:
 
@@ -89,11 +92,12 @@ At 500 the splitter is forced down to sentence level on most of the paragraphs t
 research questions, degrading toward the fixed-size behavior I rejected. My original 500 figure
 also contradicted my own premise: longform, convoluted documents argue for *larger* chunks, not
 smaller. 900 characters is ~225 tokens, fitting MiniLM's 256-token window with headroom for a
-source-title prefix. Final index: ~5,400 chunks, median 491 characters.
+source-title prefix. Final index: 4,732 chunks, with a median length of 790 characters.
 
 *Preprocessing (at ingestion, before chunking).* Gutenberg license headers and footers are
-stripped at the `*** START ***` / `*** END ***` markers, along with trailing publisher matter —
-advertisements filling ~32% of *First Steps to Bell Ringing* 
+stripped at the `*** START ***` / `*** END ***` markers. The cleaner also removes known
+Gutenberg credits, download notices, footer notices, and HTML artifacts, while retaining the
+source text between those boundaries—including historical reviews, catalogues, and tables.
 
 ---
 

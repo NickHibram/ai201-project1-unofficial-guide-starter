@@ -18,6 +18,7 @@ chroma/
 
 # Generated review copies of cleaned Gutenberg texts
 cleaned_documents/
+chunks.jsonl
 
 # macOS
 .DS_Store
