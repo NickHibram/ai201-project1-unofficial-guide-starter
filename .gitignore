@@ -16,5 +16,8 @@ env/
 chroma_db/
 chroma/
 
+# Generated review copies of cleaned Gutenberg texts
+cleaned_documents/
+
 # macOS
 .DS_Store
