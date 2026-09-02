@@ -40,6 +40,68 @@ LEADING_TRANSCRIBER_NOTICE = re.compile(
 
 
 @dataclass(frozen=True)
+class TextAnchor:
+    """A stripped whole-line anchor and its one-based occurrence."""
+
+    text: str
+    occurrence: int = 1
+
+
+CONTENT_BOUNDARIES: dict[str, tuple[TextAnchor, TextAnchor | None]] = {
+    "A Complete History of Music.txt": (
+        TextAnchor("INTRODUCTION."),
+        TextAnchor("INDEX."),
+    ),
+    "Chats to 'Cello Students.txt": (
+        TextAnchor("PREFACE."),
+        TextAnchor("THE END."),
+    ),
+    "First Steps to Bell Ringing.txt": (
+        TextAnchor("INTRODUCTION."),
+        TextAnchor("BOOKS PUBLISHED ON"),
+    ),
+    "HANDBOOK OF VIOLIN PLAYING.txt": (
+        TextAnchor("PART I.", occurrence=2),
+        TextAnchor("GUIDE THROUGH VIOLIN LITERATURE.", occurrence=2),
+    ),
+    "Italian Harpsichord-Building in the 16th and 17th Centuries.txt": (
+        TextAnchor("Italian Harpsichord-Building in the 16th and 17th Centuries"),
+        TextAnchor("FOOTNOTES:"),
+    ),
+    "Musical Instruments, Historic, Rare and Unique.txt": (
+        TextAnchor("INTRODUCTION."),
+        TextAnchor("INDEX"),
+    ),
+    "Piano Playing, with Piano Questions Answered.txt": (
+        TextAnchor("A FOREWORD"),
+        TextAnchor("ALPHABETICAL INDEX OF"),
+    ),
+    "Practical Organ Building.txt": (
+        TextAnchor("CHAPTER I.", occurrence=2),
+        TextAnchor("INDEX."),
+    ),
+    "Principles of Orchestration, with Musical Examples Drawn from His Own Works .txt": (
+        TextAnchor("Editor's Preface."),
+        None,
+    ),
+    "The coach-horn.txt": (
+        TextAnchor("Some time ago I rather thoughtlessly remarked to a subaltern in the"),
+        TextAnchor("“THE QUEEN AND THE ROAD!”"),
+    ),
+    "The Highland bagpipe.txt": (
+        TextAnchor("CHAPTER I."),
+        TextAnchor("Index."),
+    ),
+}
+
+INTERNAL_REMOVAL_REGIONS: dict[str, tuple[tuple[TextAnchor, TextAnchor], ...]] = {
+    "Piano Playing, with Piano Questions Answered.txt": (
+        (TextAnchor("_Piano Questions Answered_"), TextAnchor("A FOREWORD", occurrence=2)),
+    ),
+}
+
+
+@dataclass(frozen=True)
 class Document:
     """A cleaned source document with enough metadata for later pipeline stages."""
 
@@ -47,6 +109,40 @@ class Document:
     text: str
     original_char_count: int
     cleaned_char_count: int
+
+
+def _find_anchor_line(lines: list[str], anchor: TextAnchor, source: str) -> int:
+    """Return the index of a required anchor in ``lines``."""
+    matches = [index for index, line in enumerate(lines) if line.strip() == anchor.text]
+    if len(matches) < anchor.occurrence:
+        raise ValueError(
+            f"{source}: anchor {anchor.text!r} occurrence {anchor.occurrence} not found"
+        )
+    return matches[anchor.occurrence - 1]
+
+
+def strip_reference_apparatus(text: str, source: str) -> str:
+    """Keep the reviewed content region for a configured source document."""
+    boundary = CONTENT_BOUNDARIES.get(source)
+    if boundary is None:
+        return text
+
+    lines = text.splitlines(keepends=True)
+    start_anchor, end_anchor = boundary
+    start_index = _find_anchor_line(lines, start_anchor, source)
+    end_index = len(lines) if end_anchor is None else _find_anchor_line(lines, end_anchor, source)
+    if end_index <= start_index:
+        raise ValueError(f"{source}: end anchor must follow start anchor")
+    retained = lines[start_index:end_index]
+
+    for removal_start, removal_end in INTERNAL_REMOVAL_REGIONS.get(source, ()):
+        removal_start_index = _find_anchor_line(retained, removal_start, source)
+        removal_end_index = _find_anchor_line(retained, removal_end, source)
+        if removal_end_index <= removal_start_index:
+            raise ValueError(f"{source}: removal end anchor must follow its start anchor")
+        del retained[removal_start_index:removal_end_index]
+
+    return "".join(retained)
 
 
 def clean_gutenberg_text(raw_text: str, source: str) -> str:
@@ -79,6 +175,7 @@ def clean_gutenberg_text(raw_text: str, source: str) -> str:
     cleaned_text = LEADING_E_TEXT_CREDIT.sub("", cleaned_text)
     cleaned_text = LEADING_DOWNLOAD_NOTICE.sub("", cleaned_text)
     cleaned_text = LEADING_TRANSCRIBER_NOTICE.sub("", cleaned_text)
+    cleaned_text = strip_reference_apparatus(cleaned_text, source)
     cleaned_text = cleaned_text.strip()
     if not cleaned_text:
         raise ValueError(f"{source}: no text remains after cleaning")

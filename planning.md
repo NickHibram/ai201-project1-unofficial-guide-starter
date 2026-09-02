@@ -91,13 +91,19 @@ the `. `, `? `, and `! ` rungs recognize sentence endings without changing the r
 At 500 the splitter is forced down to sentence level on most of the paragraphs that answer my
 research questions, degrading toward the fixed-size behavior I rejected. My original 500 figure
 also contradicted my own premise: longform, convoluted documents argue for *larger* chunks, not
-smaller. 900 characters is ~225 tokens, fitting MiniLM's 256-token window with headroom for a
-source-title prefix. Final index: 4,732 chunks, with a median length of 790 characters.
+smaller. A 900-character chunk is usually below MiniLM's 256-token window, but character length
+is only an estimate: music notation, tables, and uncommon historical vocabulary can produce many
+more WordPiece tokens. After source-specific front matter, advertisement, and index removal, the
+final chunk artifact contains 4,470 chunks with a median length of 788 characters. An embedding
+preflight found that 211 title-prefixed chunks exceed MiniLM's window, so the embedding stage
+splits those exceptions without shrinking every chunk. The 4,470 reviewed chunks therefore
+produce 4,685 token-safe vector records.
 
 *Preprocessing (at ingestion, before chunking).* Gutenberg license headers and footers are
 stripped at the `*** START ***` / `*** END ***` markers. The cleaner also removes known
-Gutenberg credits, download notices, footer notices, and HTML artifacts, while retaining the
-source text between those boundaries—including historical reviews, catalogues, and tables.
+Gutenberg credits, download notices, footer notices, and HTML artifacts. Explicit per-document
+text anchors then retain only the reviewed book body, excluding front contents, publisher
+advertisements, literature indexes, and back indexes while preserving prose and aligned tables.
 
 ---
 
@@ -110,9 +116,32 @@ source text between those boundaries—including historical reviews, catalogues,
      support, accuracy on domain-specific text, latency? -->
 
 **Embedding model:**
-The EMBEDDING_MODEL is all-MiniLM-L6-v2 
+The EMBEDDING_MODEL is all-MiniLM-L6-v2.
+
+At embedding time, each input is prefixed with `<book title> — ` so an otherwise ambiguous chunk
+about a soundboard, jack, or register retains its instrument context. The prefix is not written
+back to `chunks.jsonl`. Inputs are measured with the loaded embedding model's actual tokenizer,
+including special tokens. The default MiniLM model reports a 256-token limit; the configuration
+derives its limit from the loaded model and permits only a smaller explicit override. Any input
+over that limit is divided into token windows with 32-token overlap, and the title prefix is
+repeated in every window. A very short final window is end-aligned to a full window rather than
+dropped, so no tail content is lost. Each window becomes a separate Chroma vector record,
+but it stores the complete original `chunk_txt` plus the original `chunk_id`, source filename,
+source-local position, window number, and window count. Retrieval deduplicates matching windows
+by original `chunk_id`, keeping the closest match. This preserves every token without modifying
+the human-reviewed chunks or increasing MiniLM's intended token limit.
+
+The Chroma collection is stamped with the embedding model, vector dimension, token-window
+settings, and a fingerprint of the chunk artifact. Model and token-window metadata are
+compatibility requirements: a mismatch requires an explicit reset. The fingerprint and record
+counts describe index state instead. When compatible chunks are edited or added, indexing upserts
+the current vectors and refreshes the state metadata. If the new artifact would leave obsolete
+vector IDs behind, indexing stops and requires an explicit reset rather than deleting records
+automatically.
+
 **Top-k:**
-We will retrieve the top 3 chunks
+We will retrieve the top 3 unique chunks by default; the retrieval CLI accepts `--top-k` so the
+multi-source comparison questions can be inspected with a larger result set.
 **Production tradeoff reflection:**
 
 Two changes if cost weren't a constraint.
@@ -194,17 +223,20 @@ is dense with terms like *clavicytherium* and *wrest plank*.
 **Milestone 3 — Ingestion and chunking:**
   I will use a mixture of Codex and Claude Code to implement the ingestion and chunking pipeline. I’ll provide it with my Documents and Chunking
   Strategy sections, including the 900-character cap, 150-character overlap, separator ladder, Gutenberg header/footer
-  removal, whitespace normalization, and minimum 150-character chunk length. I’ll ask it to create functions that load
-  the .txt files, clean them, split them, and preserve each chunk’s source filename and index as metadata. I’ll verify
-  the output by inspecting sample chunks from several books, confirming no Gutenberg boilerplate remains, checking chunk
-  sizes and overlap, and confirming that each chunk retains its correct source attribution.
+  removal, source-specific book-body anchors, whitespace normalization, and minimum 150-character chunk length. I’ll ask
+  it to create functions that load the .txt files, remove contents pages, advertisements, and indexes using reviewed
+  anchors, split the retained prose, and preserve each chunk’s source filename and index as metadata. I’ll verify the
+  output by inspecting sample chunks from several books, confirming no Gutenberg or publisher boilerplate remains,
+  checking chunk sizes and overlap, and confirming that each chunk retains its correct source attribution.
 
 **Milestone 4 — Embedding and retrieval:**
   I will use Codex to implement embeddings and retrieval with sentence-transformers, all-MiniLM-L6-v2, and ChromaDB.
-  I’ll give it my Retrieval Approach section and require it to store chunk text, embeddings, and metadata; embed a user
-  question; and return the top 3 most similar chunks with source information. I’ll verify it by running my five
-  evaluation questions, reviewing the returned chunks for relevance, and checking that metadata identifies the correct
-  document for each result.
+  I’ll give it my Retrieval Approach section and require it to prefix source titles only for embedding, split only inputs
+  over MiniLM's 256-token limit into overlapping token windows, and store the complete chunk text, embeddings, and source,
+  position, parent-chunk, and window metadata. The retrieval function will embed a user question, deduplicate multiple
+  window matches from the same original chunk, and return the top 3 unique chunks with source information. I’ll verify it
+  by confirming that no embedding input exceeds 256 tokens and by running all five evaluation questions, reviewing the
+  returned chunks for relevance, and checking that metadata identifies the correct document for each result.
 
 **Milestone 5 — Generation and interface:**
   I will use Codex to build a simple query interface and grounded generation step with the Groq API using the openai/

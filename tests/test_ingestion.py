@@ -12,6 +12,62 @@ END = "*** END OF THE PROJECT GUTENBERG EBOOK SAMPLE BOOK ***"
 
 
 class CleanGutenbergTextTests(unittest.TestCase):
+    def test_applies_configured_content_boundaries(self) -> None:
+        raw = (
+            f"{START}\n"
+            "Title and contents.\n\n"
+            "PREFACE.\n\n"
+            "Useful cello instruction.\n\n"
+            "THE END.\n\n"
+            "THE STRAD publisher advertisement.\n"
+            f"{END}"
+        )
+
+        cleaned = clean_gutenberg_text(raw, "Chats to 'Cello Students.txt")
+
+        self.assertEqual(cleaned, "PREFACE.\n\nUseful cello instruction.")
+
+    def test_selects_explicit_occurrences_of_repeated_anchors(self) -> None:
+        raw = (
+            f"{START}\n"
+            "PART I.\nContents entry.\n\n"
+            "PART I.\nActual violin instruction.\n\n"
+            "GUIDE THROUGH VIOLIN LITERATURE.\nUseful literature guide.\n\n"
+            "GUIDE THROUGH VIOLIN LITERATURE.\nRepeated contents block.\n"
+            f"{END}"
+        )
+
+        cleaned = clean_gutenberg_text(raw, "HANDBOOK OF VIOLIN PLAYING.txt")
+
+        self.assertEqual(
+            cleaned,
+            "PART I.\nActual violin instruction.\n\n"
+            "GUIDE THROUGH VIOLIN LITERATURE.\nUseful literature guide.",
+        )
+
+    def test_removes_piano_internal_contents_without_removing_second_foreword(self) -> None:
+        raw = (
+            f"{START}\n"
+            "A FOREWORD\nFirst book prose.\n\n"
+            "_Piano Questions Answered_\nCONTENTS\nTechnique 3\n\n"
+            "A FOREWORD\nSecond book prose.\n\n"
+            "ALPHABETICAL INDEX OF\nQUESTIONS\nTechnique 3\n"
+            f"{END}"
+        )
+
+        cleaned = clean_gutenberg_text(raw, "Piano Playing, with Piano Questions Answered.txt")
+
+        self.assertEqual(
+            cleaned,
+            "A FOREWORD\nFirst book prose.\n\nA FOREWORD\nSecond book prose.",
+        )
+
+    def test_rejects_configured_source_when_an_anchor_is_missing(self) -> None:
+        raw = f"{START}\nBook text without configured anchors.\n{END}"
+
+        with self.assertRaisesRegex(ValueError, "The coach-horn.txt.*anchor"):
+            clean_gutenberg_text(raw, "The coach-horn.txt")
+
     def test_removes_wrappers_without_reflowing_book_content(self) -> None:
         raw = (
             "Project Gutenberg licensing information\n\n"
@@ -139,7 +195,7 @@ class LoadingAndWritingTests(unittest.TestCase):
             self.assertEqual((output_dir / "alpha.txt").read_text(encoding="utf-8"), "Alpha text.\n")
             self.assertNotIn("PROJECT GUTENBERG", (output_dir / "zeta.txt").read_text(encoding="utf-8"))
 
-    def test_real_corpus_loads_and_preserves_intentionally_retained_sections(self) -> None:
+    def test_real_corpus_loads_only_reviewed_book_content(self) -> None:
         project_root = Path(__file__).resolve().parents[1]
         documents = load_documents(project_root / "documents")
         by_source = {document.source: document for document in documents}
@@ -147,9 +203,32 @@ class LoadingAndWritingTests(unittest.TestCase):
         self.assertEqual(len(documents), 11)
         self.assertTrue(all(document.text for document in documents))
         self.assertTrue(all("*** START OF THE PROJECT GUTENBERG" not in document.text for document in documents))
-        self.assertIn("OPINIONS OF THE PRESS.", by_source["First Steps to Bell Ringing.txt"].text)
+        self.assertTrue(
+            by_source["A Complete History of Music.txt"].text.startswith("INTRODUCTION.")
+        )
+        self.assertNotIn("\n                                 INDEX.\n", by_source["A Complete History of Music.txt"].text)
+        self.assertTrue(by_source["Chats to 'Cello Students.txt"].text.startswith("PREFACE."))
+        self.assertNotIn("THE STRAD publisher", by_source["Chats to 'Cello Students.txt"].text)
+        self.assertNotIn("TENTH YEAR OF ISSUE", by_source["Chats to 'Cello Students.txt"].text)
+        self.assertTrue(by_source["First Steps to Bell Ringing.txt"].text.startswith("INTRODUCTION."))
+        self.assertNotIn("BOOKS PUBLISHED ON", by_source["First Steps to Bell Ringing.txt"].text)
+        self.assertNotIn("OPINIONS OF THE PRESS.", by_source["First Steps to Bell Ringing.txt"].text)
         self.assertIn(
             "GUIDE THROUGH VIOLIN LITERATURE.", by_source["HANDBOOK OF VIOLIN PLAYING.txt"].text
+        )
+        self.assertEqual(
+            by_source["HANDBOOK OF VIOLIN PLAYING.txt"].text.count(
+                "GUIDE THROUGH VIOLIN LITERATURE."
+            ),
+            1,
+        )
+        self.assertNotIn(
+            "ALPHABETICAL INDEX OF\nQUESTIONS",
+            by_source["Piano Playing, with Piano Questions Answered.txt"].text,
+        )
+        self.assertNotIn(
+            "_Piano Questions Answered_",
+            by_source["Piano Playing, with Piano Questions Answered.txt"].text,
         )
         self.assertIn(
             "                    _Polygonal    _Harpsichord_\n"
@@ -167,9 +246,7 @@ class LoadingAndWritingTests(unittest.TestCase):
                 "Produced by"
             )
         )
-        self.assertTrue(
-            by_source["First Steps to Bell Ringing.txt"].text.startswith("FIRST STEPS TO BELL RINGING:")
-        )
+        self.assertTrue(by_source["Practical Organ Building.txt"].text.startswith("CHAPTER I."))
 
 
 if __name__ == "__main__":
