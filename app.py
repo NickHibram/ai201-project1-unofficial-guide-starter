@@ -11,7 +11,9 @@ from src.query import (
     QueryConfigurationError,
     RetrievalExecutionError,
     RetrievalInitializationError,
+    append_session_memory,
     ask,
+    initialize_session_memory,
 )
 from src.retrieval import QueryTooLongError
 
@@ -37,28 +39,35 @@ def handle_chat(question: str, history: list[dict[str, Any]] | None) -> tuple[st
     """Append one independent grounded exchange to the visible chat history."""
     messages: list[dict[str, str]] = list(history or [])
     if not isinstance(question, str) or not question.strip():
-        messages.append({"role": "assistant", "content": "Please enter a question."})
+        answer = "Please enter a question."
+        messages.append({"role": "assistant", "content": answer})
+        append_session_memory(str(question), answer)
         return "", messages
     if len(question) > MAX_QUESTION_CHARACTERS:
+        answer = "Your question is too long. Please shorten it and try again."
         messages.append(
             {
                 "role": "assistant",
-                "content": "Your question is too long. Please shorten it and try again.",
+                "content": answer,
             }
         )
+        append_session_memory(question, answer)
         return "", messages
 
     try:
         result = ask(question, debug=True)
         answer = result["answer"]
+        sources = result["sources"]
     except Exception as error:
         answer = _error_message(error)
+        sources = []
     messages.extend(
         (
             {"role": "user", "content": question},
             {"role": "assistant", "content": answer},
         )
     )
+    append_session_memory(question, answer, sources)
     return "", messages
 
 
@@ -85,4 +94,5 @@ demo = create_demo()
 
 
 if __name__ == "__main__":
+    initialize_session_memory()
     demo.queue().launch(show_error=False)

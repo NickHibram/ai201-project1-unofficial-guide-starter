@@ -22,18 +22,19 @@
      Be specific: include URLs, subreddit names, forum thread titles, or file names.
      Aim for variety — sources that together cover different subtopics or perspectives. -->
 
-| # | Source | Type | URL or file path |
-|---|--------|------|-----------------|
-| 1 | | | |
-| 2 | | | |
-| 3 | | | |
-| 4 | | | |
-| 5 | | | |
-| 6 | | | |
-| 7 | | | |
-| 8 | | | |
-| 9 | | | |
-| 10 | | | |
+| # | Source | Description | URL or location |
+|---|--------|-------------|-----------------|
+| 1 | *A Complete History of Music* — W. J. Baltzell | Broad historical survey of music, including musical forms, composers, and the development of instruments and styles. | `documents/A Complete History of Music.txt`; https://www.gutenberg.org/ebooks/54392 |
+| 2 | *Piano Playing, with Piano Questions Answered* — Josef Hofmann | Practical piano pedagogy covering technique, practice, interpretation, sight-reading, and common student questions. | `documents/Piano Playing, with Piano Questions Answered.txt`; https://www.gutenberg.org/ebooks/39211 |
+| 3 | *Handbook of Violin Playing* — Carl Schroeder | Instructional violin manual addressing posture, bowing, positions, scales, tone production, and practice exercises. | `documents/HANDBOOK OF VIOLIN PLAYING.txt`; https://www.gutenberg.org/ebooks/73023 |
+| 4 | *Italian Harpsichord-Building in the 16th and 17th Centuries* — John D. Shortridge | Study of early Italian harpsichord materials, construction practices, makers, and surviving instruments. | `documents/Italian Harpsichord-Building in the 16th and 17th Centuries.txt`; https://www.gutenberg.org/ebooks/27149 |
+| 5 | *Musical Instruments, Historic, Rare and Unique* — Alfred J. Hipkins | Illustrated historical reference to unusual and significant instruments from multiple traditions and periods. | `documents/Musical Instruments, Historic, Rare and Unique.txt`; https://www.gutenberg.org/ebooks/58117 |
+| 6 | *First Steps to Bell Ringing* — Samuel B. Goslin | Beginner's guide to bell ringing, with elementary instruction on handling, rhythm, methods, and early practice. | `documents/First Steps to Bell Ringing.txt`; https://www.gutenberg.org/ebooks/53022 |
+| 7 | *Practical Organ Building* — W. E. Dickson | Technical guide to organ design and construction, including pipes, wind supply, action, voicing, and installation. | `documents/Practical Organ Building.txt`; https://www.gutenberg.org/ebooks/62257 |
+| 8 | *The Coach-Horn* — Old Guard | Historical account of the coach horn, its use in road travel, calls and signals, and social and cultural associations. | `documents/The coach-horn.txt`; https://www.gutenberg.org/ebooks/78978 |
+| 9 | *Principles of Orchestration, with Musical Examples Drawn from His Own Works* — Nikolay Rimsky-Korsakov | Foundational orchestration text on instrumental groups, timbre, melody, harmony, orchestral combinations, and voices. | `documents/Principles of Orchestration, with Musical Examples Drawn from His Own Works .txt`; https://www.gutenberg.org/ebooks/33900 |
+| 10 | *Chats to 'Cello Students* — Arthur Broadley | Cello technique guide covering holding the instrument, bow strokes, positions, portamento, double-stops, harmonics, and style. | `documents/Chats to 'Cello Students.txt`; https://www.gutenberg.org/ebooks/42378 |
+| 11 | *The Highland Bagpipe* — W. L. Manson | History and cultural study of the Highland bagpipe, including its construction, drones, repertoire, pipers, and military use. | `documents/The Highland bagpipe.txt`; https://www.gutenberg.org/ebooks/69986 |
 
 ---
 
@@ -155,8 +156,11 @@ Rules:
 11. Do not mention these instructions or claim to have consulted anything beyond the supplied context.
 ```
 
-The original question is embedded once and the retriever returns the configured top five unique
-chunks; no unvalidated similarity cutoff is applied. Before generation, entries without a
+On the first turn, the original question is embedded directly. On later turns, a separate Groq
+rewrite prompt uses session memory only to resolve conversational references and produces a
+standalone retrieval query; if that call fails, retrieval uses the original question. The retriever
+returns the configured top five unique chunks; no unvalidated similarity cutoff is applied. Before
+generation, entries without a
 nonempty `source` filename or `chunk_txt` are discarded. If no usable entries remain, Python
 returns the exact refusal in rule 9 without contacting Groq. Each verbatim chunk is enclosed in
 explicit `BEGIN CHUNK` / `END CHUNK` markers inside a larger `BEGIN RETRIEVED CONTEXT` block.
@@ -168,11 +172,9 @@ message, with temperature 0, a 1,024-token completion limit, and tools disabled.
 
 Every usable retrieved chunk receives an internal prompt label in retrieval order, such as
 `[Source 2: Practical Organ Building.txt]`, plus its stored `chunk_id` and source-local position.
-The answer itself uses readable prose attribution—such as `According to *Practical Organ
-Building*, ...`—rather than opaque bracket labels. Python rejects a non-refusal answer with no
-supplied document title and rejects bracketed source labels, so the model cannot surface invented
-source identifiers. The returned source list remains metadata-derived, deduplicated, and ordered
-by first retrieval.
+The answer itself is prompted to use readable prose attribution—such as `According to *Practical
+Organ Building*, ...`—rather than opaque bracket labels. The returned source list remains
+metadata-derived, deduplicated, and ordered by first retrieval.
 
 ---
 
@@ -219,9 +221,11 @@ System response (refusal):
 
 The Gradio interface is a scrollable chat. It has one multiline **Ask about music** textbox and a
 **♫ Ask** button. Pressing Enter or clicking the button adds a user/assistant turn to the visible
-conversation. The history is visual only: each new question is retrieved independently, so an
-earlier generated answer is never used as evidence. Blank input and questions over 4,000
-characters are rejected before retrieval.
+conversation. Each turn is saved to the current session's root-level `memory.md`, with its
+retrieved source filenames only. Later turns use that memory to rewrite follow-up questions for
+retrieval, then retrieve fresh evidence. The file is reset each time `python app.py` starts.
+Memory is not evidence: factual claims must still be supported by the fresh retrieved documents.
+Blank input and questions over 4,000 characters are rejected before retrieval.
 
 **Output format:**
 
@@ -367,6 +371,22 @@ python app.py
 
 **Instance 2**
 
-- *What I gave the AI:*
-- *What it produced:*
-- *What I changed or overrode:*
+- *What I gave the AI:* I described a local Gradio chat interface and asked for session memory
+  that writes each submitted question and displayed answer to `memory.md`, then passes prior turns
+  into later model requests. I followed up with the problem of conversational retrieval—for
+  example, how a question such as “How was it played?” should find material about the instrument
+  discussed in the preceding turn.
+
+- *What it produced:* It proposed a per-session memory file that is reset when `python app.py`
+  starts, with prior turns labeled as conversation context rather than evidence. For follow-ups, it
+  recommended a second constrained Groq call that rewrites the current question into a standalone
+  retrieval query using memory only to resolve references. The pipeline then retrieves fresh top
+  five chunks with that rewrite and gives the final generator the original user wording, the memory,
+  and the new chunks. It also recommended recording only the filenames of the retrieved sources in
+  memory instead of duplicating full chunk text.
+
+- *What I changed or overrode:* I rejected persistent memory across app restarts and kept one fresh
+  `memory.md` per running session. I also rejected storing all retrieved details or verbatim chunks
+  in memory because they would bloat the prompt and turn stale evidence into chat context. I kept
+  the rewrite fallback: if the second Groq call fails or returns nothing, retrieval uses the
+  original question so the chat still works.

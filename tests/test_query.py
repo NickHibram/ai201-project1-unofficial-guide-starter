@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from src import query
 from src import config
 from src.query import (
     FALLBACK_ANSWER,
@@ -70,8 +73,14 @@ class QueryTests(unittest.TestCase):
     def setUp(self) -> None:
         clear_runtime_caches()
         self.client = FakeGroqClient()
+        self.memory_directory = tempfile.TemporaryDirectory()
+        self.memory_path = Path(self.memory_directory.name) / "memory.md"
+        self.memory_patch = patch.object(query, "MEMORY_PATH", self.memory_path)
+        self.memory_patch.start()
 
     def tearDown(self) -> None:
+        self.memory_patch.stop()
+        self.memory_directory.cleanup()
         clear_runtime_caches()
 
     def _ask_with_fakes(self, results: list[dict[str, object]], question: str = "How?"):
@@ -120,6 +129,68 @@ class QueryTests(unittest.TestCase):
         self.assertIn(malicious["chunk_txt"], user_message)
         self.assertIn("BEGIN USER QUESTION", user_message)
         self.assertIn("What does the document say?", user_message)
+
+    def test_session_memory_replaces_a_previous_session_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            memory_path = Path(temporary_directory) / "memory.md"
+            memory_path.write_text("## Question\nPrevious session\n", encoding="utf-8")
+
+            with patch.object(query, "MEMORY_PATH", memory_path, create=True):
+                query.initialize_session_memory()
+
+            self.assertEqual(memory_path.read_text(encoding="utf-8"), "")
+
+    def test_prior_session_memory_is_sent_in_a_separate_prompt_section(self) -> None:
+        memory_text = "## Question\nWhat is an organ?\n\n## Answer\nA keyboard instrument.\n"
+        self.memory_path.write_text(memory_text, encoding="utf-8")
+        self._ask_with_fakes(VALID_RESULTS, "How does it work?")
+
+        user_message = self.client.completions.calls[-1]["messages"][1]["content"]
+        self.assertIn("BEGIN CONVERSATION MEMORY", user_message)
+        self.assertIn(memory_text, user_message)
+        self.assertIn("END CONVERSATION MEMORY", user_message)
+
+    def test_follow_up_uses_a_standalone_rewrite_for_retrieval_and_original_question_for_answer(self) -> None:
+        self.memory_path.write_text(
+            "## Question\nTell me about the coach-horn.\n\n## Answer\nIt sounds coach signals.\n",
+            encoding="utf-8",
+        )
+        self.client = FakeGroqClient("How was the coach-horn played?")
+
+        _, retrieve_mock = self._ask_with_fakes(VALID_RESULTS, "How was it played?")
+
+        retrieve_mock.assert_called_once_with(
+            "How was the coach-horn played?", "model", "collection", top_k=5
+        )
+        provider_calls = self.client.completions.calls
+        self.assertEqual(len(provider_calls), 2)
+        rewrite_request, answer_request = provider_calls
+        self.assertEqual(rewrite_request["model"], config.LLM_MODEL)
+        self.assertEqual(rewrite_request["temperature"], 0)
+        self.assertEqual(rewrite_request["max_completion_tokens"], 128)
+        self.assertEqual(rewrite_request["tools"], [])
+        self.assertIn("standalone retrieval query", rewrite_request["messages"][0]["content"])
+        self.assertIn("How was it played?", rewrite_request["messages"][1]["content"])
+        self.assertIn("Tell me about the coach-horn.", rewrite_request["messages"][1]["content"])
+        self.assertIn("How was it played?", answer_request["messages"][1]["content"])
+
+    def test_rewrite_failure_uses_the_original_question_for_retrieval(self) -> None:
+        self.memory_path.write_text("## Question\nEarlier turn\n", encoding="utf-8")
+        original_create = self.client.completions.create
+
+        def fail_then_answer(**kwargs: object) -> SimpleNamespace:
+            if not self.client.completions.calls:
+                self.client.completions.calls.append(kwargs)
+                raise RuntimeError("rewrite unavailable")
+            return original_create(**kwargs)
+
+        self.client.completions.create = fail_then_answer
+        result, retrieve_mock = self._ask_with_fakes(VALID_RESULTS, "How was it played?")
+
+        retrieve_mock.assert_called_once_with(
+            "How was it played?", "model", "collection", top_k=5
+        )
+        self.assertEqual(result["answer"], "According to *organ*, wind enters the sound-board.")
 
     def test_generation_uses_configured_model_and_disables_tools(self) -> None:
         self._ask_with_fakes(VALID_RESULTS)

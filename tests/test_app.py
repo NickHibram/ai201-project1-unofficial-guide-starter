@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import importlib
 import sys
+import tempfile
 import unittest
+from pathlib import Path
 from types import ModuleType
 from unittest.mock import patch
 
@@ -70,6 +72,16 @@ class AppTests(unittest.TestCase):
         with patch.dict(sys.modules, {"gradio": cls.fake_gradio}):
             cls.app = importlib.import_module("app")
 
+    def setUp(self) -> None:
+        self.memory_directory = tempfile.TemporaryDirectory()
+        self.memory_path = Path(self.memory_directory.name) / "memory.md"
+        self.memory_patch = patch("src.query.MEMORY_PATH", self.memory_path)
+        self.memory_patch.start()
+
+    def tearDown(self) -> None:
+        self.memory_patch.stop()
+        self.memory_directory.cleanup()
+
     def test_chat_appends_question_and_answer_without_sending_history_to_retrieval(self) -> None:
         prior = [{"role": "user", "content": "Earlier question"}]
         with patch.object(
@@ -90,6 +102,20 @@ class AppTests(unittest.TestCase):
         )
         ask_mock.assert_called_once_with("What is an organ?", debug=True)
 
+    def test_completed_chat_appends_the_displayed_exchange_to_session_memory(self) -> None:
+        with patch.object(
+            self.app,
+            "ask",
+            return_value={"answer": "A supported answer.", "sources": ["organ.txt", "violin.txt"]},
+        ):
+            self.app.handle_chat("What is a coach-horn?", [])
+
+        self.assertEqual(
+            self.memory_path.read_text(encoding="utf-8"),
+            "## Question\nWhat is a coach-horn?\n\n## Answer\nA supported answer.\n\n"
+            "## Sources\n- organ.txt\n- violin.txt\n\n",
+        )
+
     def test_empty_and_overlong_input_append_safe_assistant_messages(self) -> None:
         with patch.object(self.app, "ask") as ask_mock:
             _, empty_history = self.app.handle_chat("   ", [])
@@ -103,6 +129,12 @@ class AppTests(unittest.TestCase):
             [{"role": "assistant", "content": "Your question is too long. Please shorten it and try again."}],
         )
         ask_mock.assert_not_called()
+        self.assertEqual(
+            self.memory_path.read_text(encoding="utf-8"),
+            "## Question\n   \n\n## Answer\nPlease enter a question.\n\n"
+            f"## Question\n{'x' * (self.app.MAX_QUESTION_CHARACTERS + 1)}\n\n"
+            "## Answer\nYour question is too long. Please shorten it and try again.\n\n",
+        )
 
     def test_backend_errors_append_sanitized_assistant_messages(self) -> None:
         cases = [
