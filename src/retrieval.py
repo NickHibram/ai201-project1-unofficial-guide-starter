@@ -110,18 +110,21 @@ def format_result(rank: int, result: dict[str, str | int | float]) -> str:
     )
 
 
-def _load_runtime() -> tuple[Any, Any]:
+def load_runtime() -> tuple[Any, Any]:
+    """Load the configured embedding model and persistent Chroma collection."""
     try:
         import chromadb
         from sentence_transformers import SentenceTransformer
     except ImportError as exc:
-        raise SystemExit("Install project dependencies with: pip install -r requirements.txt") from exc
+        raise RuntimeError(
+            "Install project dependencies with: pip install -r requirements.txt"
+        ) from exc
     model = SentenceTransformer(config.EMBEDDING_MODEL)
     client = chromadb.PersistentClient(path=str(config.CHROMA_PATH))
     try:
         collection = client.get_collection(name=config.CHROMA_COLLECTION, embedding_function=None)
     except Exception as exc:
-        raise SystemExit("No vector index found. Run: python3 -m src.embeddings index") from exc
+        raise RuntimeError("No vector index found. Run: python3 -m src.embeddings index") from exc
     return model, collection
 
 
@@ -131,7 +134,10 @@ def main() -> None:
     parser.add_argument("--top-k", type=int, default=config.N_RESULTS)
     args = parser.parse_args()
 
-    model, collection = _load_runtime()
+    try:
+        model, collection = load_runtime()
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
     results = retrieve(args.query, model, collection, top_k=args.top_k)
     for rank, result in enumerate(results, start=1):
         print(format_result(rank, result))
