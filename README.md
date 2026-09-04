@@ -366,13 +366,14 @@ python app.py
 <!-- Show a complete query → response exchange as it actually appears in your interface.
      Must be text — not a screenshot. -->
 
-> **User:** 
-How is a coach horn played?
+> **User:**
+> How is a coach horn played?
 
-> **System:** 
-According to **The coach-horn**, a coach horn is played by grasping the instrument firmly with the right hand about six inches from the mouthpiece, holding it straight and in line with the mouth. The player presses the mouthpiece against the centre of the mouth, a little higher on the top lip than the lower, then almost closes the lips, drawing them tightly across the teeth as if spitting. The player then blows sharply into the horn—“spitting” into the mouthpiece without excessive saliva—while avoiding puffing out the cheeks. The desired sound is produced by making a “tpff” noise with the tip of the tongue, ready to articulate the next note quickly.
+> **System:**
+> According to **The coach-horn**, a coach horn is played by grasping the instrument firmly with the right hand about six inches from the mouthpiece, holding it straight and in line with the mouth. The player presses the mouthpiece against the centre of the mouth, a little higher on the top lip than the lower, then almost closes the lips, drawing them tightly across the teeth as if spitting. The player then blows sharply into the horn—“spitting” into the mouthpiece without excessive saliva—while avoiding puffing out the cheeks. The desired sound is produced by making a “tpff” noise with the tip of the tongue, ready to articulate the next note quickly.
+>
+> The horn may include a slide that can be extended to lengthen the instrument for tuning purposes, allowing it to be used effectively as a musical instrument in orchestral settings (e.g., in various gallops). It need not be straight; it can be coiled so it can be carried in a pocket, which makes it handy for use on a dog‑cart or gig.
 
-The horn may include a slide that can be extended to lengthen the instrument for tuning purposes, allowing it to be used effectively as a musical instrument in orchestral settings (e.g., in various gallops). It need not be straight; it can be coiled so it can be carried in a pocket, which makes it handy for use on a dog‑cart or gig.
 ---
 
 ## Evaluation Report
@@ -489,12 +490,12 @@ intentionally converted to the safe generic failure message.
 **What you would change to fix it:**
 
 After seeing the validator reject otherwise good generations, I removed it so a nonempty Groq
-response reaches the interface instead of being discarded for formatting. I then focused on making
-the system prompt more specific: it supplies the exact document title for prose attribution, shows
-the required `According to *Exact Document Title*,` form, forbids parenthetical and bracketed
-alternatives, and requires every claim to be supported by retrieved text. The separately displayed
-source list remains metadata-derived from the retrieved chunks, so users can still see the evidence
-supplied to the model even if its prose attribution is imperfect.
+response reaches the interface instead of being discarded for formatting. I then made the system
+prompt more specific: it supplies the exact document title, shows the required
+`According to *Exact Document Title*,` form, forbids parenthetical and bracketed alternatives, and
+requires every claim to be supported by retrieved text. The metadata-derived source list still
+shows users the evidence supplied to the model.
+
 ---
 
 ## Spec Reflection
@@ -503,30 +504,23 @@ supplied to the model even if its prose attribution is imperfect.
      Answer both questions with at least 2–3 sentences each. -->
 
 **One way the spec helped you during implementation:**
-  The spec was especially helpful when I designed the
-  chunking strategy. It gave me a place to critique
-  my initial idea and improve it before
-  implementation, rather than treating the first
-  approach as fixed. I could give the plan to the AI
-  step by step, evaluate its suggestions, and refine
-  the approach as I learned more about the documents.
-  Writing the spec also helped reveal possible
-  problems early—such as chunk-size limits and the
-  risk of splitting important context—before they
-  became implementation issues.
+
+The spec was especially helpful when I designed the chunking strategy. It gave me a place to
+critique my initial idea and improve it before implementation, rather than treating the first
+approach as fixed. I could give the plan to the AI step by step, evaluate its suggestions, and
+refine the approach as I learned more about the documents. Writing the spec also helped reveal
+possible problems early—such as chunk-size limits and the risk of splitting important context—
+before they became implementation issues.
+
 **One way your implementation diverged from the spec, and why:**
-  My retrieval evaluation questions changed during
-  implementation. At first, I misunderstood some of
-  what the documents actually said, so some planned
-  questions and expected answers were not the best
-  way to evaluate the system. Once I began inspecting
-  retrieval results and reading the source passages
-  more closely, I replaced them with clearer
-  questions that better matched the corpus. This made
-  the evaluation more useful because it tested
-  whether the system could retrieve and answer
-  information that was genuinely present in the
-  documents.
+
+My retrieval evaluation questions changed during implementation. At first, I misunderstood some
+of what the documents actually said, so some planned questions and expected answers were not the
+best way to evaluate the system. Once I began inspecting retrieval results and reading the source
+passages more closely, I replaced them with clearer questions that better matched the corpus. This
+made the evaluation more useful because it tested whether the system could retrieve and answer
+information that was genuinely present in the documents.
+
 ---
 
 ## AI Usage
