@@ -9,10 +9,11 @@
 
 ## Domain
 
-<!-- What topic or category of knowledge does your system cover?
-     Why is this knowledge valuable, and why is it hard to find through official channels?
-     Example: "Student reviews of CS professors at [university] — useful because official
-     course descriptions don't reflect teaching style, exam difficulty, or workload." -->
+This system covers music knowledge: historical instruments, instrument construction, playing
+techniques, and musical history. The information is valuable because it brings together detailed
+answers from specialized source books. It is difficult to find through ordinary search because the
+books are scattered, often antiquated, and use terminology and structures that are hard to search
+or synthesize. The source corpus was collected from Project Gutenberg.
 
 ---
 
@@ -40,20 +41,37 @@
 
 ## Chunking Strategy
 
-<!-- Describe your chunking approach with enough specificity that someone else could reproduce it.
-     Include:
-     - Chunk size (characters or tokens) and why that size fits your documents
-     - Overlap size and why (or why not) you used overlap
-     - Any preprocessing you did before chunking (e.g., stripping HTML, removing headers)
-     - What your final chunk count was across all documents -->
-
 **Chunk size:**
+
+900 characters (roughly 225 tokens). The recursive splitter prefers paragraph boundaries, then
+sentence boundaries (`. `, `? `, and `! `), then spaces, and uses a character boundary only as a
+last resort. It repacks adjacent pieces up to the cap, so the result is not a collection of
+single-sentence fragments. Tables retain their aligned rows and repeat a table header when a table
+must be split.
 
 **Overlap:**
 
+Up to 150 characters of semantic overlap (about 17% of the cap). When a prose chunk fills, the
+next chunk begins with as many complete preceding units as fit within 150 characters. This retains
+context across boundaries without creating a fixed 150-character duplicate at every boundary.
+
 **Why these choices fit your documents:**
 
+The corpus mixes short plate captions and dictionary-like entries with long technical paragraphs.
+Recursive boundary-aware splitting keeps related prose together and avoids cutting a sentence or
+word in the middle. A 900-character cap preserves substantially more complete long paragraphs
+than a 500-character cap while remaining usually below the 256-token MiniLM embedding limit.
+Before chunking, the ingestion step removes Project Gutenberg headers and footers, credits,
+download notices, HTML artifacts, front contents, advertisements, literature indexes, and back
+indexes. The chunker then normalizes hard-wrapped whitespace in memory while preserving paragraph
+boundaries; it drops isolated illustration markers and preserves aligned tables.
+
 **Final chunk count:**
+
+4,470 reviewed, source-attributed chunks. Their median text length is 788 characters (minimum 57,
+maximum 900). At embedding time, the 211 title-prefixed chunks that exceed MiniLM's token window
+are further split into safe overlapping token windows, yielding 4,685 vector records without
+changing the reviewed chunk artifact.
 
 ---
 
@@ -75,54 +93,121 @@
 
 ## Embedding Model
 
-<!-- Name the embedding model you used and explain your choice.
-     Then answer: if you were deploying this system for real users and cost wasn't a constraint,
-     what tradeoffs would you weigh in choosing a different model?
-     Consider: context length limits, multilingual support, accuracy on domain-specific text,
-     latency, and local vs. API-hosted. -->
-
 **Model used:**
 
+The system uses the local `all-MiniLM-L6-v2` sentence-transformers model. It is a compact,
+English-language embedding model that provides fast local retrieval. Each embedding input is
+prefixed with its book title to preserve instrument context; the model's 256-token limit is
+enforced by splitting longer inputs into overlapping token windows. ChromaDB stores and searches
+those vectors, then duplicate windows from the same original chunk are removed before results are
+returned.
+
 **Production tradeoff reflection:**
+
+For a production version without cost constraints, I would use an embedding model with a larger
+token limit so the system could embed larger chunks and preserve more of a long explanation in one
+retrieval result. I would also add an illustration-aware document pipeline: musical books often put
+important construction, posture, and instrument-identification information in images, which the
+current text-only retrieval cannot use. A multilingual model would make it possible to include
+non-English primary sources, and a model better trained on specialized music vocabulary could
+improve matches for terms such as *clavicytherium* and *wrest plank*.
 
 ---
 
 ## Retrieval Test Results
 
-<!-- Run these 3 queries through your retrieval system and record the top returned chunks.
-     For at least 2 of the 3, explain why the returned chunks are relevant to the query.
-     Results must be text — not screenshots. -->
+These live results use the configured top five unique chunks. Distances are Chroma distances;
+smaller values indicate closer matches.
 
-**Query 1:**
+**Query 1:** What are unique instruments
 
 Top returned chunks:
--
--
--
 
-Relevance explanation:
+1. `A Complete History of Music.txt` — chunk 305, `A Complete History of Music.txt::00305`, distance 0.3470:
+
+   > LESSON XV. MUSICAL INSTRUMENTS. =Classification of Instruments=.—The means for the production of musical sound are few in number, and of such universality and antiquity that we cannot say when, how, or by whom they were invented. Modern skill has not added one new means, but has simply improved the contrivances by which musical sound is produced. We can, however, trace the evolution and growth of the various instruments with considerable accuracy, and to this end it is of the utmost importance to have a clear understanding of the principles upon which musical instruments are constructed, in order to avoid bewilderment among the endless variety that have been and are yet made. All instruments may be divided into three general classes: Percussion Instruments, Wind Instruments, Stringed Instruments. =The Percussion Instruments= are the instruments of rhythm.
+
+2. `Musical Instruments, Historic, Rare and Unique.txt` — chunk 1, `Musical Instruments, Historic, Rare and Unique.txt::00001`, distance 0.3643:
+
+   > INTRODUCTION. It is claimed for this book, intended to illustrate rare historical and beautiful Musical Instruments, that it is unique. Classical, Mediæval, Japanese, and other varieties of Decorative Art, Weapons, and Costumes, have found worthy illustration and adequate description, but hitherto no attempt has been made to represent in a like manner the grace and external charm of fine lutes and harps, of viols, virginals, and other instruments. Engravings have been produced, in historical or technical works; but the greater number of these are mere repetitions continued from one to the other, and have no specially æsthetic interest.
+
+3. `Principles of Orchestration, with Musical Examples Drawn from His Own Works .txt` — chunk 318, `Principles of Orchestration, with Musical Examples Drawn from His Own Works .txt::00318`, distance 0.3671:
+
+   > Neither musical feeling nor the ear itself can stand, for long, the full resources of the orchestra combined together. The favourite group of instruments is the strings, then follow in order the wood-wind, brass, kettle-drums, harps, _pizzicato_ effects, and lastly the percussion, also, in point of order, triangle, cymbals, big drum, side drum, tambourine, gong. Further removed stand the celesta, _glockenspiel_ and xylophone, which instruments, though melodic, are too characteristic in timbre to be employed over frequently. The same may be said of the piano and castanets. A quantity of national instruments not included in the present work may be incorporated into the orchestra; such are the guitar, the domra, zither, mandoline, the oriental tambourine, small tambourine etc. These instruments are employed from time to time for descriptive-aesthetic purposes.
+
+4. `A Complete History of Music.txt` — chunk 765, `A Complete History of Music.txt::00765`, distance 0.3991:
+
+   > The usual classification is into three main groups, =strings=, (bowed instruments), =wind= and =percussion= instruments. In the former are included the violins, viola, violoncello and double or contra-bass; =wind= instruments subordinate into =wood wind= and =brass=, the former include instruments of the flute, oboe, bassoon and clarinet families, the latter horns, trumpets, trombones, tuba or other bass instruments; the =percussion= includes kettle drums, other drums, triangles, cymbals, etc.; the =harp=, while a stringed instrument, is not included in that class. These instruments offer a great variety of effects, singly and in many possible combinations, in the peculiar effects possible by variety in playing, which in bowed instruments is considerable, and particularly by contrast with each other.
+
+5. `Principles of Orchestration, with Musical Examples Drawn from His Own Works .txt` — chunk 116, `Principles of Orchestration, with Musical Examples Drawn from His Own Works .txt::00116`, distance 0.4043:
+
+   > It is still harder to form a comparison with instruments of little sustaining power, for too great a diversity in production and emission of sound exists. The combined force of groups of sustained resonance easily overpowers the strings played _pizz._ or _col legno_, the piano played softly, or the celesta. As regards the _glockenspiel_, bells, and xylophone, their emphatic tone will easily prevail over other groups in combination. The same may be said of the kettle-drums with their ringing, resounding quality, and also of other subsidiary instruments.
+
+**Relevance explanation:** The query is broad, so the results appropriately provide a historical
+description of rare instruments, classifications, and examples of unusually characteristic
+instruments. The second chunk is the strongest match because its source is specifically about rare
+and unique instruments.
 
 ---
 
-**Query 2:**
+**Query 2:** What do bagpipes sound like
 
 Top returned chunks:
--
--
--
 
-Relevance explanation:
+1. `The Highland bagpipe.txt` — chunk 129, `The Highland bagpipe.txt::00129`, distance 0.2923:
+
+   > The bellows of course gets over the difficulty, but we hardly wish to see a bellows attached to the Highland Bagpipe. It would not then be Highland. The Highland bagpipe is louder and more shrill than any other, probably because it was all along intended for use as an instrument of war, and pipe music is known to have been heard at a distance of six miles, and, under specially favourable circumstances, of ten miles. The Duke of Sutherland has a bagpipe which was played on in the ’45, and could be heard at a distance of eight miles. Modern pipes are generally made of black ebony or cocoawood, the ferrules or rings being of ivory. Sometimes the pipes are half-mounted in silver, that is the high ferrules in ivory and the low in silver. The drones of the best makers have the inside lined with metal, where there is friction in the tuning slide.
+
+2. `The Highland bagpipe.txt` — chunk 427, `The Highland bagpipe.txt::00427`, distance 0.3166:
+
+   > “Sermons,” he says, “are like Scottish bagpipes. They sound very well when one doesn’t hear them.” William Black, however, rarely if ever sneers, and this is very mild indeed, compared with what some other writers have thrown at the instrument.
+
+3. `The Highland bagpipe.txt` — chunk 413, `The Highland bagpipe.txt::00413`, distance 0.3208:
+
+   > Thomas Kirke, the Englishman who wrote _A Modern Account of Scotland_, in 1679, said—“Musick they (the Highlanders) have, but not the harmony of the sphears, but loud terrene noises, like the bellowing of beasts; the loud bagpipe is their delight; stringed instruments are too soft to penetrate the organs of their ears, that are only pleased with sounds of substance.” Dr. Mac Culloch, already quoted,[13] who travelled Scotland in 1824, calls the bagpipe as vile a contrivance as can be imagined, and describes in graphic language all its alleged defects, and the sad result of listening to its music:— Footnote 13: See Page 80. “It is harsh, imperfect, and untunable.
+
+4. `The Highland bagpipe.txt` — chunk 792, `The Highland bagpipe.txt::00792`, distance 0.3216:
+
+   > It is obvious that to have a perfect chromatic scale a separate string or pipe is required for each note in such instruments as the organ and pianoforte, while it is obtained in those of the flute and oboe class by making additional holes in the tube at the correct intervals and covering them with close-fitting pads with levers (keys) within convenient reach of the fingers. (Having mentioned the oboe, it may be remarked in passing that its tone has been called “bagpipe music sublimated.”) Various attempts have been made to adapt similar appliances to the chanter of the bagpipe, but the results have not been satisfactory, and its scale remains practically the same as it was two centuries ago. It will be shown, however, with the aid of the table of vibrations appended to this article, that it does not differ so widely from the natural or “equal temperament” scales as the critics allege.
+
+5. `Musical Instruments, Historic, Rare and Unique.txt` — chunk 77, `Musical Instruments, Historic, Rare and Unique.txt::00077`, distance 0.3308:
+
+   > The chanter is of ivory, with seven holes in front and one behind. The large bagpipe with a green bag is the Lowland Scotch. It is of boxwood, with three drones placed in one stock. The two shorter drones sound in unison, the long one an octave lower, the same as in the Highland Bagpipe. They are mounted with carved horn. The chanter has seven finger-holes and a vent-hole, also the same as in the Highland Bagpipe, with which the Lowland agrees in fingering and other particulars, except that it is inflated by bellows attached to the bag by a short blow-pipe, a peculiarity that it has in common with the other Bagpipes in this Plate. The bellows of the modern Northumbrian Bagpipe are also drawn. The Bagpipe is, as Mr. Henri Lavoix has justly said in his _La Musique au Siècle de Saint Louis_, the organ reduced to its most simple expression.
+
+**Relevance explanation:** The first three chunks directly address perceived volume, shrillness, and
+historical descriptions of the instrument's tone. The remaining two provide useful technical
+context about the chanter, scale, and drones.
 
 ---
 
-**Query 3:**
+**Query 3:** What are coach horns made of
 
 Top returned chunks:
--
--
--
 
-Relevance explanation:
+1. `The coach-horn.txt` — chunk 5, `The coach-horn.txt::00005`, distance 0.2953:
+
+   > A Coach-horn should always be straight and made of copper, with German-silver or real silver mouthpiece and mountings, and the bell should be funnel-shaped, and not curved outwards like an ordinary trumpet-bell. Although a strictly legitimate Coach-horn should be made in one entire piece of metal, still there has recently been introduced a “Telescope” Coach-horn, made with a joint ferrule in the middle, which allows the top half to slide inside the lower portion of the Horn, without actually falling out—something after the style of the portable metal drinking cups. From actual experience, I can safely say that the tone and ease in blowing are not in the least affected by this innovation—which, indeed, I consider an improvement—for Coach-horns when thus “telescoped” are not nearly so liable to get bent or injured, and are more easily packed and carried about.
+
+2. `The coach-horn.txt` — chunk 10, `The coach-horn.txt::00010`, distance 0.2998:
+
+   > A proper Post-horn ought also to be made with a slide, to elongate it if necessary, for tuning purposes; for it is often effectively used in the orchestra as a musical instrument; for instance, in Kœnig’s unrivalled “Post-horn” gallop, also in the more modern “Down the Road” and the “New Derby” gallops, etc. It need not necessarily be straight, but may be coiled up so as to be carried in the pocket, in which shape it is handier for use in a dog-cart or gig. Having thus described the two kinds of Horns used for coaching purposes, I will now proceed with my INSTRUCTIONS TO LEARNERS.
+
+3. `The coach-horn.txt` — chunk 24, `The coach-horn.txt::00024`, distance 0.3064:
+
+   > I believe this tale was told over the mess-table, and I should like to have been present at the time. Of course, there are Coach-horns and _Coach-horns_; some easy to blow and of proper tone, others just the reverse, and the difference is to be accounted for not only in the model, but also in the workmanship, gauge of metal, and mode of their construction. With these particulars I will not weary my readers, and it being an admitted fact that there is only one firm of musical instrument makers in London—I may say in the world—who know how to make really good Coach-horns, and that being the one with which I happen to be connected, I hardly like mentioning their name and address.
+
+4. `The coach-horn.txt` — chunk 9, `The coach-horn.txt::00009`, distance 0.3756:
+
+   > Now the Post, or, as it is now so often called, the Tandem-horn, differs from the above, inasmuch as it is of a much smaller calibre or bore, being only twenty-eight or thirty-two inches in length, and made always of brass instead of copper. The bell, unlike that of the Coach-horn, should be trumpet-shaped, for the tone is materially affected thereby; and a well-curved bell will yield a sound far more appropriate to a pair of horses, tandem fashion, than a funnel-shaped bell.
+
+5. `The coach-horn.txt` — chunk 21, `The coach-horn.txt::00021`, distance 0.4015:
+
+   > Having nothing whatever to do, I was seized with a sudden fit of compassion for the gentleman who was blowing the Horn—for he was getting black in the face, and it was a smoking hot day. I took the liberty to address him, saying that, if he would allow me to make an attempt, I thought I might be able to produce more musical sounds. With a “Ah, ah, thank you, er,” he politely handed me the Horn. First glancing at the maker’s name and Prize Medals which are conspicuously stamped on all genuine Coach-horns, I remarked, “Ah, this is a good Horn, and no mistake, for it came from the only man in London who knows how to make a Coach-horn;” and then proceeding to blow it in my usual inimitable style, I may say that I made “the welkin ring again.”
+
+**Relevance explanation:** All five results come from *The Coach-Horn*. The first chunk directly
+answers the question: it specifies copper for the horn and German-silver or real silver for the
+mouthpiece and mountings. The other chunks provide related construction, material, and comparison
+context.
 
 ---
 
@@ -180,35 +265,43 @@ metadata-derived, deduplicated, and ordered by first retrieval.
 
 ## Example Responses
 
-<!-- Provide at least 2 grounded responses (query + response + source attribution)
-     and 1 out-of-scope query showing your system's refusal.
-     All entries must be text — not screenshots. -->
-
 **Grounded response 1**
 
-Query:
+Query: What are unique instruments
 
-Response:
+Response: According to *Musical Instruments, Historic, Rare and Unique*, unique instruments are
+the rare, historical, and aesthetically notable members of the musical family—examples given
+include fine lutes and harps, viols, virginals, and other similar instruments.
 
-Source attribution:
+Source attribution: `Musical Instruments, Historic, Rare and Unique.txt` (the complete retrieved
+source list also included `A Complete History of Music.txt` and `Principles of Orchestration, with
+Musical Examples Drawn from His Own Works .txt`).
 
 ---
 
 **Grounded response 2**
 
-Query:
+Query: What do bagpipes sound like
 
-Response:
+Response: According to *The Highland bagpipe*, the instrument is “louder and more shrill than any
+other,” a quality attributed to its historic use as a war instrument, and its music could be heard
+for many miles. Thomas Kirke described the Highlanders’ music as “loud terrene noises, like the
+bellowing of beasts,” noting that “the loud bagpipe is their delight.” Dr. Mac Culloch went
+further, calling the bagpipe “harsh, imperfect, and untunable.” A later writer likened sermons to
+Scottish bagpipes, saying they “sound very well when one doesn’t hear them,” underscoring the
+generally negative perception of its tone.
 
-Source attribution:
+Source attribution: `The Highland bagpipe.txt` (the complete retrieved source list also included
+`Musical Instruments, Historic, Rare and Unique.txt`).
 
 ---
 
 **Out-of-scope query**
 
-Query:
+Query: what color is naruto's hair
 
-System response (refusal):
+System response (refusal): I don't have enough information in the retrieved documents to answer
+this question.
 
 ---
 
@@ -274,9 +367,12 @@ python app.py
      Must be text — not a screenshot. -->
 
 > **User:** 
+How is a coach horn played?
 
 > **System:** 
+According to **The coach-horn**, a coach horn is played by grasping the instrument firmly with the right hand about six inches from the mouthpiece, holding it straight and in line with the mouth. The player presses the mouthpiece against the centre of the mouth, a little higher on the top lip than the lower, then almost closes the lips, drawing them tightly across the teeth as if spitting. The player then blows sharply into the horn—“spitting” into the mouthpiece without excessive saliva—while avoiding puffing out the cheeks. The desired sound is produced by making a “tpff” noise with the tip of the tongue, ready to articulate the next note quickly.
 
+The horn may include a slide that can be extended to lengthen the instrument for tuning purposes, allowing it to be used effectively as a musical instrument in orchestral settings (e.g., in various gallops). It need not be straight; it can be coiled so it can be carried in a pocket, which makes it handy for use on a dog‑cart or gig.
 ---
 
 ## Evaluation Report
@@ -360,25 +456,45 @@ below was run with empty temporary session memory.
 
 ## Failure Case Analysis
 
-<!-- Identify at least one question where retrieval or generation did not work as expected.
-     Write a specific explanation of *why* it failed, tied to a part of the pipeline.
-
-     "The answer was wrong" is not an explanation.
-
-     "The relevant information was split across a chunk boundary, so retrieval returned
-     only half the context — the model didn't have enough to answer correctly" is an explanation.
-
-     "The embedding model treated the professor's nickname as out-of-vocabulary and returned
-     results from an unrelated review" is an explanation. -->
-
 **Question that failed:**
+
+What is a coach-horn used for?
 
 **What the system returned:**
 
+***Rejected generations Examples:***
+
+> A coach-horn is used to sound signals while a coach is in motion (The coach-horn).
+
+> According to the retrieved historical documents, a coach-horn is a horn associated with horse-drawn coaches that is used to sound signals while the coach is in motion. One writer notes that a coach-horn can be blown by the driver even as he continues to drive, describing it as “rather a dangerous feat, which requires practice”. Another passage remarks that a “four-foot Coach-horn will answer the purpose” for playing tunes, while a shorter horn is preferred for “old-fashioned coaching calls”.
+
+***UI output:***
+
+> The answer service failed. Please try again.
+
+Both generations used retrieved evidence, but used parenthetical citations rather than the
+validator's required `According to *Document Title*, ...` pattern.
+
 **Root cause (tied to a specific pipeline stage):**
+
+The problem involved both generation prompting and post-generation validation. I had added a
+validator function intended to ensure that each model response cited a retrieved source. It was too
+strict and was also incorrect in some cases: it treated any citation that did not match one exact
+prose pattern as invalid. At the same time, the original system prompt did not specify that pattern
+clearly enough for the model to follow it reliably. The model therefore sometimes gave a relevant,
+grounded answer with parenthetical attribution, or without the validator's required attribution,
+and the validator rejected it. That rejection raised a generation error, which the Gradio interface
+intentionally converted to the safe generic failure message.
 
 **What you would change to fix it:**
 
+After seeing the validator reject otherwise good generations, I removed it so a nonempty Groq
+response reaches the interface instead of being discarded for formatting. I then focused on making
+the system prompt more specific: it supplies the exact document title for prose attribution, shows
+the required `According to *Exact Document Title*,` form, forbids parenthetical and bracketed
+alternatives, and requires every claim to be supported by retrieved text. The separately displayed
+source list remains metadata-derived from the retrieved chunks, so users can still see the evidence
+supplied to the model even if its prose attribution is imperfect.
 ---
 
 ## Spec Reflection
@@ -387,9 +503,30 @@ below was run with empty temporary session memory.
      Answer both questions with at least 2–3 sentences each. -->
 
 **One way the spec helped you during implementation:**
-
+  The spec was especially helpful when I designed the
+  chunking strategy. It gave me a place to critique
+  my initial idea and improve it before
+  implementation, rather than treating the first
+  approach as fixed. I could give the plan to the AI
+  step by step, evaluate its suggestions, and refine
+  the approach as I learned more about the documents.
+  Writing the spec also helped reveal possible
+  problems early—such as chunk-size limits and the
+  risk of splitting important context—before they
+  became implementation issues.
 **One way your implementation diverged from the spec, and why:**
-
+  My retrieval evaluation questions changed during
+  implementation. At first, I misunderstood some of
+  what the documents actually said, so some planned
+  questions and expected answers were not the best
+  way to evaluate the system. Once I began inspecting
+  retrieval results and reading the source passages
+  more closely, I replaced them with clearer
+  questions that better matched the corpus. This made
+  the evaluation more useful because it tested
+  whether the system could retrieve and answer
+  information that was genuinely present in the
+  documents.
 ---
 
 ## AI Usage
