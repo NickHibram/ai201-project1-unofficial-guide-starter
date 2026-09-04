@@ -47,7 +47,7 @@ digraph RAGPipeline {
   chunking [
     label=<
       <B>2. Chunking</B><BR/>
-      <FONT POINT-SIZE="10">Custom recursive splitter<BR/>900-character chunks<BR/>150-character overlap</FONT>
+      <FONT POINT-SIZE="10">Custom recursive splitter<BR/>900-character chunks; up to 150-character overlap<BR/>Separator ladder: \n\n → . ? ! → space → character</FONT>
     >
   ];
 
@@ -70,14 +70,14 @@ digraph RAGPipeline {
   retrieval [
     label=<
       <B>4. Retrieval</B><BR/>
-      <FONT POINT-SIZE="10">ChromaDB similarity search<BR/>Embed the question and retrieve<BR/>the 3 most relevant chunks</FONT>
+      <FONT POINT-SIZE="10">ChromaDB similarity search<BR/>Embed the question and retrieve<BR/>the top 5 unique chunks</FONT>
     >
   ];
 
   generation [
     label=<
       <B>5. Generation</B><BR/>
-      <FONT POINT-SIZE="10">Groq API + Llama model<BR/>Grounded prompt using only<BR/>retrieved context</FONT>
+      <FONT POINT-SIZE="10">Groq API + OpenAI model<BR/>Grounded prompt using only<BR/>retrieved context</FONT>
     >
   ];
 
@@ -95,6 +95,6 @@ digraph RAGPipeline {
   chunking -> store [label="chunks + metadata"];
   store -> retrieval [label="embedded collection"];
   query -> retrieval [label="embedded query"];
-  retrieval -> generation [label="top 3 chunks"];
+  retrieval -> generation [label="top 5 chunks"];
   generation -> answer [label="grounded response"];
 }
