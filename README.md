@@ -386,9 +386,6 @@ python app.py
      Be honest — a partially accurate or inaccurate result that you explain well is more
      valuable than a suspiciously perfect result. -->
 
-The complete verbatim run, source lists, and reasoning are in `testing_5_quest.md`. Each question
-below was run with empty temporary session memory.
-
 ### 1. Japanese koto
 
 **Question:** What is the Japanese koto, and how is it played?
