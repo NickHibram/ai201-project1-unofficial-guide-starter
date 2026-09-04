@@ -22,3 +22,6 @@ chunks.jsonl
 
 # macOS
 .DS_Store
+
+# Local demo recording is hosted externally rather than committed to Git.
+Demo Video.mov

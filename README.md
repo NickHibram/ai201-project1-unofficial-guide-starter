@@ -5,6 +5,10 @@
 > Do not write placeholder text — if a section isn't done yet, leave it blank and come back.
 > Every section below is required for submission. One-liners will not receive full credit.
 
+## Demo Video
+
+[Watch the demo video](https://drive.google.com/file/d/1sbiXz9mZRW7daDm5lKChgtmEzY2TkIoU/view?usp=sharing)
+
 ---
 
 ## Domain
